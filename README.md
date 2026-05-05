@@ -6,9 +6,10 @@
 
 ## Demo
 
-<video src="Screencast%20from%2005-05-2026%2002%3A21%3A04%20AM.webm" controls width="720"></video>
+Two screencasts (Git LFS — clone with `git lfs pull` to download):
 
-<video src="Screencast%20from%2005-06-2026%2001%3A03%3A30%20AM.webm" controls width="720"></video>
+- [Screencast 2026-05-05 02:21 — initial nav2 demo](Screencast%20from%2005-05-2026%2002%3A21%3A04%20AM.webm)
+- [Screencast 2026-05-06 01:03 — full bringup + saved-point demo](Screencast%20from%2005-06-2026%2001%3A03%3A30%20AM.webm)
 
 ---
 
@@ -245,7 +246,7 @@ t= 30s  └── nav_goal_ui node  (Qt goal panel)
 **Key design choices vs upstream:**
 - All `use_sim_time: true` — the sim clock drives every component.
 - `setup_path` resolves to `$HOME/clearpath/` via `EnvironmentVariable` substitution, so no hard-coded home directory.
-- Initial pose is published automatically at t=25s with identity covariance (σ_xy=0.25 m, σ_yaw=0.0685 rad), removing the manual "2D Pose Estimate" step in RViz.
+- Initial pose is published automatically at t=25s with covariance diagonal: 0.25 (xy variance, m²), 0.0685 (yaw variance, rad²), removing the manual "2D Pose Estimate" step in RViz.
 
 ---
 
@@ -433,7 +434,7 @@ source ~/clearpath_ws/install/setup.bash
 ros2 launch j100_nav2_bringup bringup.launch.py
 ```
 
-The stack comes up in stages over ~30 seconds (see the timeline in [Section 6](#srcj100_nav2_bringuplaunchbringuplandlaunchpy)). Wait until you see the Qt "J100 Nav2 Goal Sender" window appear before sending goals.
+The stack comes up in stages over ~30 seconds (see the timeline in [the bringup.launch.py section](#srcj100_nav2_bringuplaunchbringuplaunchpy)). Wait until you see the Qt "J100 Nav2 Goal Sender" window appear before sending goals.
 
 To load a different Gazebo world:
 
