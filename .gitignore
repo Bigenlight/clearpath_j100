@@ -1,0 +1,26 @@
+# Colcon build artifacts
+build/
+install/
+log/
+
+# vcs-imported upstream packages (not user's work)
+src/clearpath_common/
+src/clearpath_config/
+src/clearpath_msgs/
+
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Common editor / OS noise
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+
+# Rosbag / other large files that might appear
+*.bag
+*.db3
