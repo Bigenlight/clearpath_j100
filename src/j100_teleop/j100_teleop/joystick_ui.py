@@ -17,8 +17,7 @@ PyQt5 기반 가상 조이스틱 UI — geometry_msgs/msg/Twist 퍼블리셔
   이 파일은 j100_teleop 패키지의 메인 노드입니다.
   $ source /opt/ros/humble/setup.bash        # ROS2 환경 설정 (한 번만)
   $ source install/setup.bash                # 패키지 빌드 후 오버레이 설정
-  $ ros2 run j100_teleop joystick_ui         # (권장) 단독 노드 실행
-  $ ros2 launch j100_teleop joystick.launch.py  # Node로 띄울 때
+  $ ros2 run j100_teleop joystick_ui         # 단독 노드 실행
 
 [통신 대상]
   Clearpath J100(Jackal) 로봇 또는 그 시뮬레이터.

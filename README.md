@@ -16,7 +16,7 @@ Two screencasts (Git LFS — clone with `git lfs pull` to download):
 ## What's in this repo
 
 - **`src/j100_nav2_bringup/`** — ROS 2 Python package: one-command launch file that starts Gazebo, RViz, AMCL, Nav2, and the Qt goal panel in the correct order using timed sequencing.
-- **`joystick_ui.py`** — standalone PyQt5 virtual joystick that publishes directly to `/j100_0001/cmd_vel` at 20 Hz.
+- **`src/j100_teleop/`** — ROS 2 Python package: PyQt5 virtual joystick node that publishes directly to `/j100_0001/cmd_vel` at 20 Hz. Run with `ros2 run j100_teleop joystick_ui`.
 - **`dependencies.repos`** — `vcstool` manifest that pulls in the three upstream Clearpath source packages (`clearpath_common`, `clearpath_config`, `clearpath_msgs`) from the `humble` branch.
 - **Screencast `.webm` files** — demo recordings tracked with Git LFS.
 
@@ -317,9 +317,9 @@ This makes `nav_goal_ui` available as a `ros2 run` executable and as a `Node(exe
 
 ---
 
-### `joystick_ui.py`
+### `j100_teleop` package (`joystick_ui` node)
 
-**Purpose:** Standalone PyQt5 virtual joystick. Run independently (not through the bringup launch file) for manual teleoperation during map building or debugging.
+**Purpose:** PyQt5 virtual joystick packaged as a standalone ROS 2 node. Run independently (not through the bringup launch file) for manual teleoperation during map building or debugging — `ros2 run j100_teleop joystick_ui`.
 
 **Key constants:**
 
@@ -462,7 +462,9 @@ ros2 action send_goal /j100_0001/navigate_to_pose nav2_msgs/action/NavigateToPos
 Run independently from any terminal where the workspace is sourced:
 
 ```bash
-python3 ~/clearpath_ws/joystick_ui.py
+source /opt/ros/humble/setup.bash
+source ~/clearpath_ws/install/setup.bash
+ros2 run j100_teleop joystick_ui
 ```
 
 Click and drag the joystick knob to drive the robot. Use the sliders to set speed limits. Press **Space** or click the red button to engage the emergency stop. The status bar shows subscriber count and publish rate; a yellow warning appears if no twist_mux subscriber is detected.

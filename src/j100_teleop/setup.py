@@ -5,16 +5,8 @@
 #
 # [주요 역할]
 #   1. 패키지 Python 모듈을 site-packages에 설치
-#   2. launch 파일 / package.xml / 리소스 마커를 share/ 디렉터리에 복사
+#   2. package.xml / 리소스 마커를 share/ 디렉터리에 복사
 #   3. entry_points로 'ros2 run' 에서 쓸 실행 가능한 스크립트를 등록
-
-# glob: 와일드카드(*)로 파일 목록을 가져오는 표준 라이브러리 함수.
-#   launch/*.launch.py 처럼 패턴으로 여러 파일을 data_files에 한 번에 추가할 때 사용.
-from glob import glob
-
-# os.path.join: OS에 맞는 경로 구분자(/ 또는 \)로 경로를 결합.
-#   플랫폼 독립적인 경로 작성을 위해 사용한다.
-import os
 
 # setuptools.setup: 패키지 설치 메타데이터와 파일 목록을 colcon/pip에 전달하는 함수.
 # find_packages: 패키지 디렉터리(__init__.py 포함)를 자동 탐색하는 헬퍼.
@@ -58,18 +50,6 @@ setup(
         # install/share/j100_teleop/package.xml 위치에 복사.
         # 런타임에 rclpy 등이 패키지 메타데이터(의존성, 버전 등)를 읽을 때 사용.
         ('share/' + package_name, ['package.xml']),
-
-        # [launch 파일 설치]
-        # launch/*.launch.py 를 glob으로 찾아
-        # install/share/j100_teleop/launch/ 디렉터리에 복사.
-        #
-        # 이 항목이 있어야 'ros2 launch j100_teleop joystick.launch.py'가 동작한다.
-        # ros2 launch는 ament_index를 통해 패키지의 share/패키지명/launch/ 경로를
-        # 자동으로 검색하기 때문이다.
-        # glob('launch/*.launch.py')를 쓰면 launch 파일을 추가해도 setup.py를
-        # 수정하지 않아도 되므로 유지보수가 편리하다.
-        (os.path.join('share', package_name, 'launch'),
-            glob('launch/*.launch.py')),
     ],
 
     # ── Python 패키지 의존성 ────────────────────────────────────────────────────
