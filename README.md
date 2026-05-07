@@ -8,8 +8,9 @@
 
 Two screencasts (Git LFS — clone with `git lfs pull` to download):
 
-- [Screencast 2026-05-05 02:21 — initial nav2 demo](Screencast%20from%2005-05-2026%2002%3A21%3A04%20AM.webm)
-- [Screencast 2026-05-06 01:03 — full bringup + saved-point demo](Screencast%20from%2005-06-2026%2001%3A03%3A30%20AM.webm)
+- [cmd_vel](https://youtu.be/NZIPiNkcQfM?si=8HaGmp93eK22XXpL)
+
+- [nav2](https://youtu.be/7O_JdQN24Jc?si=5rXbLWALN1S0OPcD)
 
 ---
 
