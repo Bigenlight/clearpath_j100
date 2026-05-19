@@ -8,6 +8,12 @@
 #   2. package.xml / 리소스 마커를 share/ 디렉터리에 복사
 #   3. entry_points로 'ros2 run' 에서 쓸 실행 가능한 스크립트를 등록
 
+# os.path.join: 운영체제에 맞는 경로 구분자로 설치 경로 문자열을 조립.
+import os
+# glob: launch/*.launch.py 처럼 와일드카드 패턴에 맞는 파일 목록을 수집.
+#   표준 ROS2 ament_python 패키지가 launch 디렉터리를 설치할 때 쓰는 관용적 방식.
+from glob import glob
+
 # setuptools.setup: 패키지 설치 메타데이터와 파일 목록을 colcon/pip에 전달하는 함수.
 # find_packages: 패키지 디렉터리(__init__.py 포함)를 자동 탐색하는 헬퍼.
 from setuptools import find_packages, setup
@@ -50,6 +56,18 @@ setup(
         # install/share/j100_teleop/package.xml 위치에 복사.
         # 런타임에 rclpy 등이 패키지 메타데이터(의존성, 버전 등)를 읽을 때 사용.
         ('share/' + package_name, ['package.xml']),
+
+        # [launch 파일 설치]
+        # launch/ 디렉터리의 *.launch.py 파일들을
+        # install/share/j100_teleop/launch/ 아래에 복사한다.
+        # 'ros2 launch j100_teleop teleop_split.launch.py' 명령은
+        # 이 share/ 경로에 설치된 launch 파일을 찾아 실행하므로,
+        # 이 항목이 없으면 launch 파일이 install space 에 들어가지 않아
+        # 'ros2 launch' 가 파일을 못 찾는다.
+        # glob() 으로 패턴에 맞는 파일을 자동 수집하는 것이
+        # 표준 ROS2 ament_python 패키지의 관용적 방식이다.
+        (os.path.join('share', package_name, 'launch'),
+            glob('launch/*.launch.py')),
     ],
 
     # ── Python 패키지 의존성 ────────────────────────────────────────────────────
@@ -85,7 +103,22 @@ setup(
     #         즉, joystick_ui.py 안의 main() 함수가 진입점이 된다.
     entry_points={
         'console_scripts': [
+            # [모놀리식 UI] 기존 단일 노드 — UI+발행을 한 노드에 몰아넣은 버전.
+            #   2-노드 분리 후에도 비교/참고용으로 그대로 유지한다(비파괴 원칙).
+            #   'ros2 run j100_teleop joystick_ui'
             'joystick_ui = j100_teleop.joystick_ui:main',
+
+            # [Node 1 — 발행 전용] PyQt5 가상 조이스틱.
+            #   joystick_publisher.py 의 main() 진입점.
+            #   /joystick_cmd 토픽으로 스케일링된 Twist 를 20Hz 로 발행한다.
+            #   'ros2 run j100_teleop joystick_publisher'
+            'joystick_publisher = j100_teleop.joystick_publisher:main',
+
+            # [Node 2 — 릴레이/워치독] /joystick_cmd 를 구독해
+            #   /j100_0001/cmd_vel 로 20Hz 재발행. 입력이 끊기면 zero 발행.
+            #   cmd_vel_relay.py 의 main() 진입점.
+            #   'ros2 run j100_teleop cmd_vel_relay'
+            'cmd_vel_relay = j100_teleop.cmd_vel_relay:main',
         ],
     },
 )

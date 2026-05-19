@@ -17,7 +17,7 @@ Two screencasts (Git LFS — clone with `git lfs pull` to download):
 ## What's in this repo
 
 - **`src/j100_nav2_bringup/`** — ROS 2 Python package: one-command launch file that starts Gazebo, RViz, AMCL, Nav2, and the Qt goal panel in the correct order using timed sequencing.
-- **`src/j100_teleop/`** — ROS 2 Python package: PyQt5 virtual joystick node that publishes directly to `/j100_0001/cmd_vel` at 20 Hz. Run with `ros2 run j100_teleop joystick_ui`.
+- **`src/j100_teleop/`** — ROS 2 Python package with a PyQt5 virtual joystick. Ships in **two forms**: (1) the original single-node monolith `joystick_ui` that publishes directly to `/j100_0001/cmd_vel`; (2) a **two-node split** — `joystick_publisher` (PyQt, publishes to the intermediate topic `/joystick_cmd`) → `cmd_vel_relay` (a **multithreaded** relay that republishes to `/j100_0001/cmd_vel` at 20 Hz with a 0.5 s input watchdog). Run the split with `ros2 launch j100_teleop teleop_split.launch.py`.
 - **`dependencies.repos`** — `vcstool` manifest that pulls in the three upstream Clearpath source packages (`clearpath_common`, `clearpath_config`, `clearpath_msgs`) from the `humble` branch.
 - **Screencast `.webm` files** — demo recordings tracked with Git LFS.
 
@@ -318,11 +318,35 @@ This makes `nav_goal_ui` available as a `ros2 run` executable and as a `Node(exe
 
 ---
 
-### `j100_teleop` package (`joystick_ui` node)
+### `j100_teleop` package
 
-**Purpose:** PyQt5 virtual joystick packaged as a standalone ROS 2 node. Run independently (not through the bringup launch file) for manual teleoperation during map building or debugging — `ros2 run j100_teleop joystick_ui`.
+This package provides the PyQt5 virtual joystick in **two interchangeable forms**. Both are independent of the bringup launch file and are used for manual teleoperation during map building or debugging.
 
-**Key constants:**
+| Form | Executables | Topology |
+|---|---|---|
+| **Monolith** (original) | `joystick_ui` | One node: PyQt + publish → `/j100_0001/cmd_vel` |
+| **Two-node split** (added) | `joystick_publisher` + `cmd_vel_relay` | `joystick_publisher` (PyQt, pub-only) → `/joystick_cmd` → `cmd_vel_relay` (sub + multithreaded relay) → `/j100_0001/cmd_vel` |
+
+```
+[joystick_publisher]  /joystick_cmd (Twist)   [cmd_vel_relay]   /j100_0001/cmd_vel   [robot]
+  PyQt UI, Pub-only  ───────────────────────▶  Sub + 20 Hz     ────────────────────▶
+  SingleThreadedExec     BEST_EFFORT QoS       timer republish      BEST_EFFORT QoS
+                                                ★ MultiThreadedExecutor
+```
+
+#### Two-node split — why and how
+
+The split exists as a teaching exercise in ROS 2 multithreading. Responsibilities are separated cleanly:
+
+- **`joystick_publisher`** (node name `joystick_publisher`): owns the PyQt5 UI and all slider/REP-103 scaling. It is **publish-only** — no subscription, no rclpy timer, no ROS callbacks — so a `SingleThreadedExecutor` on a daemon spin thread is correct (there is nothing to parallelize; `publish()` is thread-safe and independent of executor spin). The Qt `QTimer` drives publishing at 20 Hz to the intermediate topic `/joystick_cmd`.
+
+- **`cmd_vel_relay`** (node name `cmd_vel_relay`): subscribes to `/joystick_cmd` and republishes to `/j100_0001/cmd_vel`. **This node is mandatorily multithreaded** — it runs a `MultiThreadedExecutor` with **two separate `MutuallyExclusiveCallbackGroup`s**: one for the subscription callback, one for the 20 Hz timer callback. Different groups let the input-receive callback and the steady output callback run on **different threads in parallel** (with the default single group they would serialize even under a multithreaded executor). The shared state (`_latest_twist`, `_last_rx_time`) written by the sub thread and read by the timer thread is guarded by a `threading.Lock`.
+
+- **Watchdog (safety):** the relay's timer republishes the latest Twist at a steady 20 Hz regardless of input rate. If no `/joystick_cmd` message has arrived within `INPUT_TIMEOUT` (0.5 s) — or none ever arrived — it actively publishes a **zero Twist** so the robot stops if `joystick_publisher` freezes or dies. Elapsed time uses `time.monotonic()` (not the ROS clock) so the watchdog is immune to wall-clock jumps and `use_sim_time` pauses.
+
+This decouples the cmd_vel output rate from the (possibly jittery/slow) input rate — verified live at ~20.0 Hz output under a 5 Hz input, with a ~0.42 s active-stop transition after input loss.
+
+#### `joystick_ui` (monolith) — key constants
 
 | Constant | Value | Description |
 |---|---|---|
@@ -348,6 +372,8 @@ This makes `nav_goal_ui` available as a `ros2 run` executable and as a `Node(exe
 | Close event | Publishes one final zero twist before ROS teardown |
 
 **Axis convention:** Joystick up → positive `linear.x`; joystick right → negative `angular.z` (REP-103 right-hand rule: clockwise yaw = negative).
+
+> **Split-node note:** `joystick_publisher` reuses the same `JoystickWidget`, so the constants, QoS, safety features, and axis convention above all apply to it unchanged — it only changes the publish target to `/joystick_cmd`. The single-stop guarantee is additionally enforced downstream by the `cmd_vel_relay` watchdog (`INPUT_TIMEOUT = 0.5 s`, `RELAY_PERIOD_S = 0.05 s`). Both endpoints use the same `BEST_EFFORT` QoS, so `/joystick_cmd` has the same QoS-mismatch caveat as `/j100_0001/cmd_vel` (see Troubleshooting).
 
 ---
 
@@ -460,27 +486,43 @@ ros2 action send_goal /j100_0001/navigate_to_pose nav2_msgs/action/NavigateToPos
 
 ### 7c. Manual teleoperation (joystick UI)
 
-Run independently from any terminal where the workspace is sourced:
+Run independently from any terminal where the workspace is sourced. **Pick one of the two forms** (do not run both — they would both drive `/j100_0001/cmd_vel`):
 
 ```bash
 source /opt/ros/humble/setup.bash
 source ~/clearpath_ws/install/setup.bash
+
+# Form 1 — original single-node monolith:
 ros2 run j100_teleop joystick_ui
+
+# Form 2 — two-node split, both nodes via one launch file (recommended):
+ros2 launch j100_teleop teleop_split.launch.py
+
+# Form 2 — or the two split nodes manually, in two terminals:
+ros2 run j100_teleop joystick_publisher    # PyQt UI → /joystick_cmd
+ros2 run j100_teleop cmd_vel_relay         # multithreaded relay → /j100_0001/cmd_vel
 ```
 
-Click and drag the joystick knob to drive the robot. Use the sliders to set speed limits. Press **Space** or click the red button to engage the emergency stop. The status bar shows subscriber count and publish rate; a yellow warning appears if no twist_mux subscriber is detected.
+Click and drag the joystick knob to drive the robot. Use the sliders to set speed limits. Press **Space** or click the red button to engage the emergency stop. The status bar shows subscriber count and publish rate; a yellow warning appears if no subscriber is detected.
+
+Verify the split is wired correctly:
+
+```bash
+ros2 node list                       # expect /joystick_publisher and /cmd_vel_relay
+ros2 topic hz /j100_0001/cmd_vel     # expect ~20 Hz, steady even with slow/no input
+```
 
 ---
 
 ## Architecture Notes
 
-**Namespace:** Every ROS entity (topics, actions, TF frames, parameter namespaces) lives under `/j100_0001/`. This is set in `robot.yaml` and propagated by the Clearpath launch infrastructure. The `joystick_ui.py` and `nav_goal_ui.py` hard-code this namespace.
+**Namespace:** Every ROS entity (topics, actions, TF frames, parameter namespaces) lives under `/j100_0001/`. This is set in `robot.yaml` and propagated by the Clearpath launch infrastructure. The `joystick_ui.py`, `nav_goal_ui.py`, and `cmd_vel_relay.py` hard-code this namespace (`/j100_0001/cmd_vel`). `joystick_publisher.py` instead publishes to the namespace-free intermediate topic `/joystick_cmd`; the namespace is reintroduced only at the `cmd_vel_relay` output.
 
 **TimerAction sequencing rationale:** Gazebo Fortress takes approximately 8-12 seconds to finish loading the world and spawning the robot before it begins publishing `/clock`. AMCL and Nav2 both require a running clock (they use sim time) and a working TF tree before they can initialize. Launching them immediately causes silent failures. The 10s / 15s / 25s / 30s delays are conservative margins that work reliably on a modern desktop.
 
 **Automatic initial pose:** AMCL requires an initial pose estimate before it can localize. Without one the costmaps remain empty and Nav2 rejects all goals. The launch file publishes a `geometry_msgs/PoseWithCovarianceStamped` at t=25s that places the robot at the map origin with a moderate uncertainty covariance, eliminating the need to click "2D Pose Estimate" in RViz.
 
-**Twist mux priorities:** The Clearpath platform uses `twist_mux` to arbitrate between multiple velocity sources. The joystick UI (publishing to `/j100_0001/cmd_vel`) is registered at priority 1 (highest). Nav2 sends goals via the action interface; the controller publishes at a lower priority. An active Nav2 goal will be preempted if the joystick publishes a non-zero twist.
+**Twist mux priorities:** The Clearpath platform uses `twist_mux` to arbitrate between multiple velocity sources. The teleop source publishing to `/j100_0001/cmd_vel` (`joystick_ui` in the monolith form, or `cmd_vel_relay` in the split form) is registered at priority 1 (highest). Nav2 sends goals via the action interface; the controller publishes at a lower priority. An active Nav2 goal will be preempted if teleop publishes a non-zero twist.
 
 **Why the nav2.yaml patch lives outside this repo:** The patched file belongs to the `ros-humble-clearpath-nav2-demos` apt package. Shipping a modified copy in this repo would require overriding the package's install path at build time, adding significant complexity. The current approach is simpler but has one drawback: `apt upgrade` will restore the original values. Re-apply the `sed` commands in [Section 5g](#5g-apply-the-system-nav2-patch) after any upgrade of that package.
 
@@ -504,11 +546,15 @@ The nav2.yaml patch was not applied or was overwritten by an apt upgrade. Re-run
 
 **`ros2 topic echo /j100_0001/cmd_vel` hangs or shows no data**
 
-QoS mismatch. The joystick UI publishes with `BEST_EFFORT` reliability. Use:
+QoS mismatch. Every teleop publisher (`joystick_ui`, `joystick_publisher`, `cmd_vel_relay`) uses `BEST_EFFORT` reliability. Use:
 
 ```bash
 ros2 topic echo /j100_0001/cmd_vel --qos-reliability best_effort
+# same caveat for the split's intermediate topic:
+ros2 topic echo /joystick_cmd --qos-reliability best_effort
 ```
+
+In the two-node split this also bites the relay itself: if `cmd_vel_relay`'s subscription QoS did not match `joystick_publisher`'s `BEST_EFFORT` publisher, no data would flow silently. Both are pinned to `BEST_EFFORT` for this reason.
 
 **"Send to Saved Point" sends the robot to a strange location**
 

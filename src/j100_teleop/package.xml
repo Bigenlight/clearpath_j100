@@ -44,6 +44,10 @@
   <!-- python3-pyqt5: PyQt5 GUI 프레임워크. 가상 조이스틱 UI 위젯을 그리는 데 필요 -->
   <exec_depend>python3-pyqt5</exec_depend>
 
+  <!-- ros2launch: 'ros2 launch' 명령 제공. teleop_split.launch.py 로 두 노드를
+       한 번에 실행하는 데 필요. (launch/launch_ros 파이썬 패키지를 끌어옴) -->
+  <exec_depend>ros2launch</exec_depend>
+
   <!--
     test_depend: 테스트 실행 시에만 필요한 의존성.
     'colcon test' 또는 'ament_python_test'로 테스트할 때만 사용됨.
